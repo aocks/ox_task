@@ -1,0 +1,29 @@
+{
+  "envs": {
+    "simple_python": {
+      "requirements": ["requests", "click"],
+      "variables": {
+	"__comment__": "Backticks uses shell to find path to simple_tasks file",
+	"ST_PATH": "`ox_task find-path ox_task.example_tasks.simple_tasks`"
+      }
+    }
+  },
+  "jobs": {
+    "check_tickers": {
+      "env": "simple_python",
+      "note": "simple_file_log",
+      "timeout": 10,
+      "command": [
+	"python3", "$ST_PATH", "check-tickers",
+	"--alert-exists", "FUSE",
+	"--alert-not-exists", "CSLM"
+	]
+    }
+  },
+  "notes": {
+    "simple_file_log": {
+      "class_name": "SimpleFileLog",
+      "filename": "results.log.txt"
+    }
+  }
+}

@@ -1,0 +1,97 @@
+
+* Introduction
+
+The =ox_task= framework provides a way to run commands in a way
+similar to AWS Lambda but with much simpler configuration and without
+AWS. By using GitHub actions to invoke =ox_task=, you can easily
+trigger tasks to run on a schedule or in response to other events.
+
+The benefit of this approach is that it is generally quicker and
+easier to setup than something like AWS Lambda. For example, you can
+easily setup a scheduled task to run a python script using a free
+GitHub account.
+
+The drawbacks are that it is not quite as flexible as AWS Lambda
+(e.g., you do not have specialized control over networking) and not
+quite as compute efficient.
+
+* Specification
+
+To launch tasks, you create a JSON file defining your "Task Plan" as
+described below. You then execute your task plan via something like:
+
+#+BEGIN_SRC sh
+ox_task run /path/to/tasks.json
+#+END_SRC
+
+By setting up GitHub actions to schedule a workflow to run the above,
+you can easily get scheduled cloud jobs.
+
+** Task Plan
+
+A task plan consists of one or more task files. A task file can either
+be a JSON file or a python module. In either case, there should be the
+following top-level dictionaries:
+
+- envs: A dictionary of TaskEnv objects (see below).
+- notes: A dictionary of TaskNote objects (see below).
+- jobs: A dictionary of TaskJob objects (see below).
+
+*** TaskEnv
+
+A TaskEnv represents the environment to run a task. It should be a
+dictionary with the following elements:
+
+- runtime: Optional string indicating python runtime environment (e.g,
+  python3.11).
+- requirements: Optional list of strings indicating project
+  dependencies in the same format of a python requirements file. The
+  requirements are installed only once even if the TaskEnv is used by
+  multiple TaskJobs.
+- path: Optional path (relative to the main task runner root).
+- variables: Dictionary of environment variable names and values to
+  define.
+  - Environment variable substitution is performed (e.g., the values
+    can contain things like =$USER=, =$HOSTTYPE=, and so on).
+  - If a value in the =variables= dictionary starts and ends with the
+    backtick character (=`=), then we invoke the shell to evaluate it.
+    Use this sparingly since it can introduce security issues (e.g.,
+    if you have dynamic shell commands where an attacker could
+    influence the arguments). Both backtick and substitution happen
+    each time a TaskJob uses the environment (e.g., if you do
+    something like =`date`= then that will be evaluated each time a
+    TaskJob is run using this TaskEnv).
+
+  
+
+*** TaskNote
+
+A TaskNote represents how to log the task results and possibly notify
+someone about them. It should be a dictionary with the following
+elements:
+
+- class_name: String indicating the Note class to use (e.g.,
+  "SimpleFileLog").
+- Optional keywords and values passed as a dictionary to the class
+  implementation the note.
+
+*** TaskJob
+
+A TaskJob represents how to run the job for a task. It should be a
+dictionary with the following elements:
+
+- env: String name of a TaskEnv indicating environment to use in
+  running the task.
+- note: String name of a TaskNote indicating how to track or notify
+  someone about the task results.
+- command: A list of strings where the first element is the program to
+  run for the command and subsequent strings are
+  arguments. Environment variable expansion will be performed.
+- timeout: How long to allow the command to run for in seconds.
+- shell: Can be true if we should use the shell to evaluate the
+  command and false otherwise. The default is false since using the
+  shell can cause unexpected behavior (e.g, see
+  https://stackoverflow.com/q/3172470/5885546). Usually it is cleaner,
+  safer, and easier to define environment variables in the TaskEnv using
+  backtick (=`=) to call the shell and then use those environment
+  variable values in =command= than to use ~shell=True~ in the TaskJob.
