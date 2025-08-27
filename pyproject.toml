@@ -32,6 +32,7 @@ dev = [
     "flake8",
     "pylint",
     "pytest",
+    "ruff",
 ]
 
 [project.scripts]
