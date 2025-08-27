@@ -113,30 +113,6 @@ class GmailNotifier:
     def notify_message(self, msg):
         """Send an email via Gmail SMTP.
         """
-        try:
-            subject = msg.split('\n')[0]
-            # Create message
-            email_msg = MIMEMultipart()
-            email_msg['From'] = self.from_email
-            email_msg['To'] = self.to_email
-            email_msg['Subject'] = subject
-
-            # Attach message body
-            email_msg.attach(MIMEText(msg, 'plain'))
-
-            # Gmail SMTP configuration
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()  # Enable encryption
-            server.login(self.from_email, self.app_passwd)
-
-            # Send email
-            text = email_msg.as_string()
-            server.sendmail(self.from_email, self.to_email, text)
-            server.quit()
-
-            print(f"Email sent successfully to {self.to_email}")
-            return True
-
-        except Exception as problem:
-            logging.exception("Error sending email: %s", problem)
-            return False
+        subject = msg.split('\n')[0]
+        comm_utils.send_email(msg, subject, self.to_email, self.from_email,
+                              self.app_passwd)
