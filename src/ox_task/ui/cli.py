@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Dict, Any
 
 import click
+import requests
 
-from ox_task.core import models, noters, shell_tools
+from ox_task.core import models, noters, shell_tools, finders
 
 
 @click.group
@@ -31,6 +32,77 @@ def find_path(module):
         click.echo(spec.origin)
     return spec.origin
     
+
+@main.command
+@click.option('--url', required=True, help='URL for GitHub file to download.')
+@click.option('--outfile', type=click.Path(), help=(
+    'Path to where to store local copy of the file.'), required=True)
+@click.option('--timeout', type=float, default=30)
+def github_file(url, outfile, timeout):
+    """Simple function to download GitHub files.
+
+The --url can be something like include a path to a branch like:
+
+  https://github.com/python/cpython/blob/main/README.rst
+
+or can include a commit hash like
+
+  https://github.com/python/cpython/blob/a7715ccfba5b86ab09f42ae69d987a1260cba29c/README.rst"
+    """
+
+    raw_url = url.replace("github.com", "raw.githubusercontent.com").replace(
+        "/blob/", "/")
+
+    response = requests.get(raw_url, timeout=timeout)
+    response.raise_for_status()
+
+    with open(outfile, 'wb') as f:
+        f.write(response.content)
+
+
+@main.command
+@click.option('--github-url', help='URL for GitHub file to download.')
+@click.option('--path', type=click.Path(), help=(
+    'Path to where to store local copy of the file.'))
+@click.option('--timeout', type=float, default=30)
+def pyscript(github_url, path, timeout):
+    if github_url:
+        if not path:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                outfile = os.path.join(tmpdir, 'script.py')
+                github_file.callback(url=github_url, outfile=outfile,
+                                     timeout=timeout)
+                result = simple_run_command([sys.executable, outfile],
+                                            capture_output=True, text=True,
+                                            timeout=timeout)
+        else:
+            github_file.callback(url=github_url, outfile=outfile,
+                                 timeout=timeout)
+    else:
+        if path:
+            result = simple_run_command([sys.executable, outfile],
+                                        capture_output=True, text=True,
+                                        timeout=timeout)
+        else:
+            raise click.BadParameter('Must provide github-url and/or path.')
+    click.echo(result)
+    return result
+
+
+def notify_result(task_plan, noter_name, job_results, env_vars):
+    if not noter_name:
+        logging.warning('No TaskNote configured for task_plan %s',
+                        task_plan)
+        return
+    note_config = task_plan.notes.get(noter_name, None)
+    if note_config is None:
+        raise ValueError(f'No TaskNote named {noter_name}')
+    klass = finders.TaskNoteFinder.find_noter(note_config.class_name)
+    kwargs = {k: Template(v).safe_substitute(env_vars) if isinstance(
+        v, str) else v for k, v in note_config.model_dump().items()}
+
+    my_noter = klass(**kwargs)
+    my_noter.notify_result(job_results)
 
 
 
@@ -87,6 +159,43 @@ def setup_job_environment(working_dir: str, job_name: str,
     return job_dir
 
 
+def simple_run_command(command, **kwargs):
+    try:
+        result = subprocess.run(command, **kwargs)
+
+        job_results = {
+            "status": "success" if result.returncode == 0 else "failed",
+            "exit_code": result.returncode,
+            "output": result.stdout,
+            "stderr": result.stderr,
+            "command": command,
+        }
+        if job_results['exit_code'] != 0 and 'error' not in job_results:
+            job_results['error'] = job_results.get('stderr', 'unknown')
+        
+    except subprocess.TimeoutExpired as e:
+        job_results = {
+            "status": "timeout",
+            "exit_code": -1,
+            "error": f"Command timed out",
+            "output": e.stdout or "",
+            "stderr": e.stderr or "",
+            "command": command
+        }
+    except Exception as e:
+        logging.exception('Unable to run command')
+        job_results = {
+            "status": "error",
+            "exit_code": -1,
+            "error": str(e),
+            "output": "",
+            "stderr": "",
+            "command": getattr(locals().get('command'), 'command', [])
+        }
+
+    return job_results
+
+
 def run_job(working_dir: str, task_plan: models.TaskPlan, 
             job_name: str) -> Dict[str, Any]:
     """
@@ -112,6 +221,7 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
         }
     
     try:
+        job_results = {}
         # Set up job environment
         job_dir = setup_job_environment(
             working_dir, job_name, task_plan, job_config.env
@@ -152,70 +262,21 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
         if env_config.path:
             cmd_working_dir = os.path.join(job_dir, env_config.path)
         
-        # Execute command
-        import pdb; pdb.set_trace()#FIXME
-        result = subprocess.run(
-            command,
-            cwd=cmd_working_dir,
-            env=env_vars,
-            capture_output=True,
-            text=True,
-            shell=job_config.shell,
-            timeout=job_config.timeout
-        )
-        import pdb; pdb.set_trace()#FIXME
-        # Prepare results
-        job_results = {
-            "status": "success" if result.returncode == 0 else "failed",
-            "exit_code": result.returncode,
-            "output": result.stdout,
-            "stderr": result.stderr,
-            "command": command,
-            "working_dir": cmd_working_dir
-        }
-        if job_results['exit_code'] != 0 and 'error' not in job_results:
-            job_results['error'] = job_results.get('stderr', 'unknown')
-        
-    except subprocess.TimeoutExpired as e:
-        job_results = {
-            "status": "timeout",
-            "exit_code": -1,
-            "error": f"Command timed out",
-            "output": e.stdout or "",
-            "stderr": e.stderr or "",
-            "command": command
-        }
-    except Exception as e:
+        job_results = simple_run_command(
+            command, cwd=cmd_working_dir, env=env_vars, capture_output=True,
+            text=True, shell=job_config.shell, timeout=job_config.timeout)
+    except Exception as problem:
         logging.exception('Unable to run command')
         job_results = {
             "status": "error",
             "exit_code": -1,
-            "error": str(e),
+            "error": str(problem),
             "output": "",
             "stderr": "",
             "command": getattr(locals().get('command'), 'command', [])
         }
-    
-    # Handle notification
-    try:
-        note_config = task_plan.notes.get(job_config.note)
-        if note_config:
-            # Get notifier class
-            notifier_class = getattr(noters, note_config.class_name)
-            
-            # Extract additional kwargs (excluding class_name)
-            note_kwargs = {
-                k: v for k, v in note_config.dict().items() 
-                if k != "class_name"
-            }
-            
-            # Instantiate and call notifier
-            notifier = notifier_class(**note_kwargs)
-            notifier(job_results)
-            
-    except Exception as e:
-        # Don't fail the job if notification fails
-        job_results["notification_error"] = str(e)
+
+    notify_result(task_plan, job_config.note, job_results, env_vars)
     
     return job_results
 

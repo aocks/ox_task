@@ -9,9 +9,32 @@
     }
   },
   "jobs": {
+    "run_pyscript": {
+      "description": ["Example of just running a python script from GitHub.",
+		      "We do not provide a notifier as we assume that the",
+		      "script itself will handle notifications."],
+      "env": "simple_python",
+      "note": "",
+      "timeout": 10,
+      "command": [
+	"ox_task", "pyscript",
+	"--github-url",
+	"https://github.com/emin63/simple_example_tasks/blob/main/src/alert_rain.py"
+	]
+    },
+    "weather": {
+      "env": "simple_python",
+      "note": "simple_gmail",
+      "timeout": 10,
+      "command": [
+	"python3", "$ST_PATH", "weather",
+	"--latitude", "40.730610",
+	"--longitude", "-73.935242"
+	]
+    },
     "check_tickers": {
       "env": "simple_python",
-      "note": "simple_file_log",
+      "note": "simple_telegram",
       "timeout": 10,
       "command": [
 	"python3", "$ST_PATH", "check-tickers",
@@ -21,9 +44,28 @@
     }
   },
   "notes": {
-    "simple_file_log": {
-      "class_name": "SimpleFileLog",
-      "filename": "results.log.txt"
+    "simple_telegram": {
+      "description": [
+	"This is an exmaple of a simple notifier that sends messages",
+	"using a Telegram bot. You will need to provide the Telegram",
+	"token and chat ID. See Telegram docs for details."
+      ],
+      "class_name": "TelegramNotifier",
+      "conditions": ["only_if_output_non_empty"],
+      "token": "$TELEGRAM_TOKEN",
+      "chat_id": "$TELEGRAM_CHAT_ID"
+    },
+    "simple_gmail": {
+      "description": [
+	"This is an example of a simple notifier to send messages using",
+	"gmail. You will need to make sure your to provide the to_email,",
+	"from_email, and app_passwd values (e.g, from your environment).",
+	"See Gmail docs for how to generate an app password."
+      ],
+      "class_name": "GmailNotifier",
+      "to_email": "${USER}@alum.mit.edu",
+      "from_email": "$FROM_EMAIL",
+      "app_passwd": "$GMAIL_APP_PASSWD"
     }
   }
 }

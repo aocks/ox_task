@@ -61,7 +61,8 @@ class TaskJob(BaseModel):
         description=('Whether to use shell in invoking command. See docs for'
                      'passing True for shell in subprocess as it can behave'
                      'in unexpected ways.'), default=False)
-    
+    description: Optional[List[str]] = Field(
+        description="Optional description for the job.", default_factory=list)
 
 
 class TaskPlan(BaseModel):
