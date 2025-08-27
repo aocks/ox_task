@@ -4,7 +4,10 @@
 The =ox_task= framework provides a way to run commands in a way
 similar to AWS Lambda but with much simpler configuration and without
 AWS. By using GitHub actions to invoke =ox_task=, you can easily
-trigger tasks to run on a schedule or in response to other events.
+trigger tasks to run on a schedule or in response to other
+events. Even better, you can easily fork someone else's GitHub repo
+which has a workflow based on =ox_task= and get the workflow working
+for you as well.
 
 The benefit of this approach is that it is generally quicker and
 easier to setup than something like AWS Lambda. For example, you can
