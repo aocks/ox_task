@@ -9,6 +9,8 @@ import smtplib
 
 import requests
 
+from ox_task.core import comm_utils
+
 
 class Noter:
 
