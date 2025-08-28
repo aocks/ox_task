@@ -28,8 +28,8 @@ def weather(latitude, longitude, timeout):
     return results
 
 
-@click.option('--alert-exists')
-@click.option('--alert-not-exists')
+@click.option('--alert-exists', default='')
+@click.option('--alert-not-exists', default='')
 @click.option('--url',
               default='https://www.sec.gov/files/company_tickers.json')
 @click.option('--agent', default='My Company@host.com', help=(
@@ -59,4 +59,4 @@ def check_tickers(alert_exists, alert_not_exists, url, agent, timeout):
 
 
 if __name__ == '__main__':
-    cli()
+    cli()  # pragma: no cover
