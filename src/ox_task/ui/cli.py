@@ -408,7 +408,7 @@ stop execution of all tasks if any task fails.
         )
         short_msg = comm_utils.shorten_msg(
             job_result.get('output', 'unknown'), max_len=(
-                400 if job_result['exit_code'] == 0 else 1000))
+                400 if job_result['exit_code'] == 0 else 2000))
         click.echo(f"  Output: {click.style(short_msg, fg=status_color)}")
         if job_result.get("exit_code") is not None:
             click.echo(f"  Exit Code: {job_result['exit_code']}")
