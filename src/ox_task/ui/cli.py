@@ -2,6 +2,7 @@
 Task runner script that executes job plans defined in JSON or Python files.
 """
 
+from contextlib import ExitStack
 import importlib
 import importlib.util
 import json
@@ -17,7 +18,7 @@ from typing import Any, Dict, List, Union
 import click
 import requests
 
-from ox_task.core import finders, models, noters, shell_tools
+from ox_task.core import finders, models, noters, shell_tools, comm_utils
 
 
 @click.group
@@ -68,30 +69,24 @@ def github_file(url, outfile, timeout):
 def pyscript(github_url, path, timeout):
     """Download and execute a Python script from GitHub or run a local script.
     """
-    if github_url:
-        if not path:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                outfile = os.path.join(tmpdir, 'script.py')
-                github_file.callback(url=github_url, outfile=outfile,
-                                     timeout=timeout)
-                result = simple_run_command([sys.executable, outfile],
-                                            capture_output=True, text=True,
-                                            timeout=timeout)
-        else:
-            github_file.callback(url=github_url, outfile=path,
-                                 timeout=timeout)
-            result = simple_run_command([sys.executable, path],
-                                        capture_output=True, text=True,
-                                        timeout=timeout)
-    else:
-        if path:
-            result = simple_run_command([sys.executable, path],
-                                        capture_output=True, text=True,
-                                        timeout=timeout)
-        else:
-            raise click.BadParameter('Must provide github-url and/or path.')
-
-    click.echo(result)
+    if not github_url and not path:
+        raise click.BadParameter('Must provide github-url and/or path.')
+    
+    with ExitStack() as stack:
+        if github_url:  # need to download file from github
+            if not path:  # no path give so download to temporary file path
+                tmpdir = stack.enter_context(tempfile.TemporaryDirectory())
+                path = os.path.join(tmpdir, 'script.py')
+            github_file.callback(url=github_url, outfile=path, timeout=timeout)
+        cmd = [sys.executable, path]
+        result = simple_run_command(cmd, capture_output=True, text=True,
+                                    timeout=timeout)
+    
+    click.echo(f'Result of calling {cmd=}:\n{result}')
+    if result['exit_code']:
+        raise subprocess.CalledProcessError(
+            cmd=cmd, returncode=result['exit_code'], output=result.get(
+                'output', None), stderr=result.get('stderr', None))
     return result
 
 
@@ -106,18 +101,20 @@ def notify_result(task_plan: models.TaskPlan, noter_name: str,
         env_vars: Environment variables for template substitution
     """
     if not noter_name:
-        logging.warning('No TaskNote configured for task_plan %s', task_plan)
-        return
+        logging.warning('No TaskNote configured for task_plan %s; using %s',
+                        task_plan, 'EchoNotifier')
+        klass = finders.TaskNoteFinder.find_noter('EchoNotifier')
+        kwargs = {}
+    else:
+        note_config = task_plan.notes.get(noter_name)
+        if note_config is None:
+            raise ValueError(f'No TaskNote named {noter_name}')
 
-    note_config = task_plan.notes.get(noter_name)
-    if note_config is None:
-        raise ValueError(f'No TaskNote named {noter_name}')
-
-    klass = finders.TaskNoteFinder.find_noter(note_config.class_name)
-    kwargs = {
-        k: Template(v).safe_substitute(env_vars) if isinstance(v, str) else v
-        for k, v in note_config.model_dump().items()
-    }
+        klass = finders.TaskNoteFinder.find_noter(note_config.class_name)
+        kwargs = {
+            k: Template(v).safe_substitute(env_vars) if isinstance(v, str) else v
+            for k, v in note_config.model_dump().items()
+        }
 
     my_noter = klass(**kwargs)
     my_noter.notify_result(job_results)
@@ -195,38 +192,28 @@ def simple_run_command(command: List[str], **kwargs) -> Dict[str, Any]:
     Returns:
         Dictionary containing execution results
     """
+    job_results = {'cwd': kwargs.get('cwd', os.getcwd())}
     try:
         result = subprocess.run(command, **kwargs)
-
-        job_results = {
-            "status": "success" if result.returncode == 0 else "failed",
-            "exit_code": result.returncode,
-            "output": result.stdout,
-            "stderr": result.stderr,
-            "command": command,
-        }
+        job_results.update(
+            status="success" if result.returncode == 0 else "failed",
+            exit_code=result.returncode,
+            output=result.stdout, stderr=result.stderr,
+            command=command)
         if job_results['exit_code'] != 0 and 'error' not in job_results:
             job_results['error'] = job_results.get('stderr', 'unknown')
 
     except subprocess.TimeoutExpired as e:
-        job_results = {
-            "status": "timeout",
-            "exit_code": -1,
-            "error": "Command timed out",
-            "output": e.stdout or "",
-            "stderr": e.stderr or "",
-            "command": command
-        }
+        job_results.update(
+            status="timeout",
+            exit_code=-1, error="Command timed out",
+            output=e.stdout or "", stderr=e.stderr or "",
+            command=command)
     except Exception as e:
         logging.exception('Unable to run command')
-        job_results = {
-            "status": "error",
-            "exit_code": -1,
-            "error": str(e),
-            "output": "",
-            "stderr": "",
-            "command": command
-        }
+        job_results.update(
+            status="error", exit_code=-1, error=str(e),
+            output="", stderr="", command=command)
 
     return job_results
 
@@ -251,7 +238,7 @@ def _prepare_environment_variables(job_name, env_config) -> Dict[str, str]:
 
 
 def run_job(working_dir: str, task_plan: models.TaskPlan,
-            job_name: str) -> Dict[str, Any]:
+            job_name: str, re_raise=True) -> Dict[str, Any]:
     """Run a single job from the task plan.
 
     Args:
@@ -323,6 +310,17 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
 
     notify_result(task_plan, job_config.note, job_results, env_vars)
 
+    if job_results['exit_code']:
+        logging.warning(
+            'Job %s returned error code %s\n  output=%s\n  stderr=%s',
+            job_name, job_results['exit_code'],
+            job_results.get('output', None), job_results.get('stderr', None))
+        if re_raise:
+            raise subprocess.CalledProcessError(
+                cmd=command, returncode=job_results['exit_code'],
+                output=job_results.get('stdout', None),
+                stderr=job_results.get('stderr', None))
+
     return job_results
 
 
@@ -363,12 +361,18 @@ def _parse_task_plan_file(task_plan_file: str) -> models.TaskPlan:
     default=None,
     help="Working directory for job execution (default: system temp dir)"
 )
+@click.option(
+    "--re-raise/--no-re-raise", default=False, help=(
+        'If --re-raise is provided we raise an Exception if a job fails.'))
 @click.argument("task_plan_file", type=click.Path(exists=True))
-def run(working_dir: str, task_plan_file: str) -> None:
-    """
-    Run all jobs defined in a task plan file.
+def run(working_dir: str, task_plan_file: str, re_raise: bool) -> None:
+    """Run all jobs defined in a task plan file.
 
     TASK_PLAN_FILE: Path to JSON or Python file containing task definitions
+
+If you provide --re-raise, then an Exception will be raised if any job
+fails. This can be helpful if you want to debug or if you just want to
+stop execution of all tasks if any task fails.    
     """
     # Set default working directory
     if working_dir is None:
@@ -394,7 +398,7 @@ def run(working_dir: str, task_plan_file: str) -> None:
     for job_name in task_plan.jobs:
         click.echo(f"Running job: {job_name}")
 
-        job_result = run_job(working_dir, task_plan, job_name)
+        job_result = run_job(working_dir, task_plan, job_name, re_raise)
         all_results[job_name] = job_result
 
         # Print job status
@@ -402,6 +406,8 @@ def run(working_dir: str, task_plan_file: str) -> None:
         click.echo(
             f"  Status: {click.style(job_result['status'], fg=status_color)}"
         )
+        short_msg = comm_utils.shorten_msg(job_result.get('output', 'unknown'))
+        click.echo(f"  Output: {click.style(short_msg, fg=status_color)}")
         if job_result.get("exit_code") is not None:
             click.echo(f"  Exit Code: {job_result['exit_code']}")
 

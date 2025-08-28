@@ -71,6 +71,9 @@ class TaskPlan(BaseModel):
     Root model representing a complete task plan.
     Contains dictionaries of environments, notes, and jobs.
     """
+    descsription: Optional[List[str]] = Field(
+        description="Optional description or comments for plan.",
+        default_factory=list)
     envs: Dict[str, TaskEnv] = Field(
         default_factory=dict,
         description="Dictionary of TaskEnv objects"

@@ -8,7 +8,7 @@ from email.mime.multipart import MIMEMultipart
 import smtplib
 
 
-def send_email(msg, subject, to_email, from_email, app_passwd):
+def send_email(msg, subject, to_email, from_email, app_passwd, mode='plain'):
     """Send an email via Gmail SMTP.
 
     Args:
@@ -28,8 +28,10 @@ def send_email(msg, subject, to_email, from_email, app_passwd):
         email_msg['To'] = to_email
         email_msg['Subject'] = subject
 
-        # Attach message body
-        email_msg.attach(MIMEText(msg, 'plain'))
+        if mode == 'plain':
+            email_msg.attach(MIMEText(msg, 'plain'))
+        elif mode == 'html':
+            email_msg.attach(MIMEText(msg, 'html'))
 
         # Gmail SMTP configuration
         server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -47,3 +49,11 @@ def send_email(msg, subject, to_email, from_email, app_passwd):
     except Exception as problem:  # pylint: disable=broad-except
         logging.exception("Error sending email: %s", problem)
         return False
+
+
+def shorten_msg(msg, max_len=400, max_lines=5):
+    short_msg = msg[:max_len]
+    short_msg = '\n'.join(short_msg.split('\n')[:max_lines])
+    if short_msg != msg:
+        short_msg += '...'
+    return short_msg
