@@ -9,14 +9,23 @@ events. Even better, you can easily fork someone else's GitHub repo
 which has a workflow based on =ox_task= and get the workflow working
 for you as well.
 
-The benefit of this approach is that it is generally quicker and
-easier to setup than something like AWS Lambda. For example, you can
-easily setup a scheduled task to run a python script using a free
-GitHub account.
+** Benefits
 
-The drawbacks are that it is not quite as flexible as AWS Lambda
-(e.g., you do not have specialized control over networking) and not
-quite as compute efficient.
+Some benefits of using =ox_task= with GitHub actions include:
+
+  1. Programmers can easily create simple scripts or complex commands which run in the cloud (including a generous amount of free computing minutes from GitHub).
+  2. Non-programmers can easily fork examples and customize them or ask LLMs like ChatGPT, Gemini, or Claude to generate simple python scripts.
+     - The benefit of =ox_task= with GitHub actions is that you can easily get your desired scripts running the cloud.
+  3. Configuration, secret management, logs, etc., are generally easier than other cloud platforms
+
+* Examples
+
+The following provide some examples of how you can use =ox_task= by
+forking a GitHub repo and setting a few parameters to get your own
+custom cloud jobs:
+
+- https://github.com/emin63/simple_example_tasks
+  - Simple example for weather and news alerts.
 
 * Specification
 
@@ -28,7 +37,9 @@ ox_task run /path/to/tasks.json
 #+END_SRC
 
 By setting up GitHub actions to schedule a workflow to run the above,
-you can easily get scheduled cloud jobs.
+you can easily get scheduled cloud jobs (e.g., see
+[[https://github.com/emin63/simple_example_tasks][emin63/simple_example_tasks]]).
+
 
 ** Task Plan
 
