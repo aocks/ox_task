@@ -3,10 +3,6 @@
 
 import logging
 
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import smtplib
-
 import requests
 
 from ox_task.core import comm_utils
@@ -142,4 +138,3 @@ class FileNotifier:
     def notify_message(self, msg):
         with open(self.path, 'w', encoding='utf8') as fdesc:
             fdesc.write(msg)
-
