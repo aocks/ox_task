@@ -118,3 +118,28 @@ class GmailNotifier:
         subject = msg.split('\n')[0]
         comm_utils.send_email(msg, subject, self.to_email, self.from_email,
                               self.app_passwd)
+
+
+class FileNotifier:
+    """Notifier that just puts output in a file.
+    """
+
+    def __init__(self, path, conditions=None, **kwargs):
+        self.path = path
+        self.conditions = conditions
+        kwargs.pop('class_name', None)
+        kwargs.pop('description', None)
+        if kwargs:
+            logging.warning('Ignoring kwargs: %s', kwargs)
+
+    def format_result_to_msg(self, job_result):
+        return str(job_result)
+
+    def notify_result(self, job_result):
+        msg = self.format_result_to_msg(job_result)
+        self.notify_message(msg)
+
+    def notify_message(self, msg):
+        with open(self.path, 'w', encoding='utf8') as fdesc:
+            fdesc.write(msg)
+
