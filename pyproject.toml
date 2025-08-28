@@ -25,7 +25,8 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "click",
-    "requests"
+    "requests",
+    "pydantic"
 ]
 
 [project.optional-dependencies]
