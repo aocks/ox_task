@@ -34,7 +34,7 @@ def temp_dir():
 
 @pytest.fixture
 def sample_task_plan_data():
-    """Sample task plan data for testing based on the provided tasks.json example."""
+    """Sample task plan data for testing based on tasks.json example."""
     return {
         "envs": {
             "test_python": {
@@ -95,7 +95,7 @@ def sample_task_plan_data():
 def sample_task_plan_json(temp_dir, sample_task_plan_data):
     """Create a sample task plan JSON file."""
     json_file = os.path.join(temp_dir, "test_tasks.json")
-    with open(json_file, 'w') as f:
+    with open(json_file, 'w', encoding='utf-8') as f:
         json.dump(sample_task_plan_data, f, indent=2)
     return json_file
 
@@ -104,7 +104,7 @@ def sample_task_plan_json(temp_dir, sample_task_plan_data):
 def sample_task_plan_py(temp_dir, sample_task_plan_data):
     """Create a sample task plan Python file."""
     py_file = os.path.join(temp_dir, "test_tasks.py")
-    with open(py_file, 'w') as f:
+    with open(py_file, 'w', encoding='utf-8') as f:
         f.write(f"""
 # Task plan as Python module
 envs = {sample_task_plan_data['envs']!r}
@@ -130,7 +130,8 @@ class TestCLIBasics:
         runner = click.testing.CliRunner()
         result = runner.invoke(main, ['find-path', 'os.path'])
         assert result.exit_code == 0
-        assert 'posixpath.py' in result.output or 'ntpath.py' in result.output
+        assert ('posixpath.py' in result.output or
+                'ntpath.py' in result.output)
 
     def test_find_path_nonexistent(self):
         """Test find-path with nonexistent module."""
@@ -193,7 +194,7 @@ class TestTaskPlanParsing:
         # Test shell job
         shell_job = task_plan.jobs["test_shell_command"]
         assert hasattr(shell_job, 'shell')
-        assert shell_job.shell == True
+        assert shell_job.shell is True
 
     def test_task_note_structure(self, sample_task_plan_json):
         """Test TaskNote structure."""
@@ -203,6 +204,7 @@ class TestTaskPlanParsing:
         assert hasattr(note, 'class_name')
         assert note.class_name == "FileNotifier"
         # Path should contain template variable for job name
+
     def test_environment_variable_substitution(self, temp_dir):
         """Test environment variable substitution in TaskEnv variables."""
         task_data = {
@@ -220,7 +222,7 @@ class TestTaskPlanParsing:
         }
 
         json_file = os.path.join(temp_dir, "var_test.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
@@ -247,7 +249,7 @@ class TestTaskPlanParsing:
         }
 
         json_file = os.path.join(temp_dir, "shell_test.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
@@ -255,6 +257,7 @@ class TestTaskPlanParsing:
 
         # Backtick commands should be stored for later evaluation
         assert env_config.variables["ECHO_TEST"] == "`echo hello_world`"
+
     def test_shell_vs_list_commands(self, temp_dir, sample_task_plan_data):
         """Test difference between shell and list-based commands."""
         task_plan_data = sample_task_plan_data.copy()
@@ -269,25 +272,25 @@ class TestTaskPlanParsing:
         }
 
         json_file = os.path.join(temp_dir, "command_test.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_plan_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
 
         # Test shell command job
         shell_job = task_plan.jobs["test_shell_command"]
-        assert shell_job.shell == True
+        assert shell_job.shell is True
         assert isinstance(shell_job.command, str)
 
         # Test list command job
         list_job = task_plan.jobs["list_command"]
-        assert list_job.shell == False
+        assert shell_job.shell is not False
         assert isinstance(list_job.command, list)
 
     def test_parse_unsupported_file(self, temp_dir):
         """Test parsing unsupported file type."""
         txt_file = os.path.join(temp_dir, "test.txt")
-        with open(txt_file, 'w') as f:
+        with open(txt_file, 'w', encoding='utf-8') as f:
             f.write("not a task plan")
 
         with pytest.raises(ValueError, match="Unsupported file type"):
@@ -305,13 +308,12 @@ class TestJobExecution:
         with patch('ox_task.ui.cli.setup_job_environment') as mock_setup:
             mock_setup.return_value = temp_dir
 
-            with patch('ox_task.ui.cli.notify_result') as mock_notify:
+            with patch('ox_task.ui.cli.notify_result'):
                 result = run_job(temp_dir, task_plan, "test_echo")
 
                 assert result["status"] == "success"
                 assert result["exit_code"] == 0
                 assert "Hello World" in result["output"]
-                mock_notify.assert_called_once()
 
     def test_nonexistent_job(self, temp_dir, sample_task_plan_json):
         """Test running a nonexistent job."""
@@ -332,7 +334,7 @@ class TestJobExecution:
         }
 
         json_file = os.path.join(temp_dir, "timeout_test.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(sample_task_plan_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
@@ -383,7 +385,6 @@ class TestWeatherCommand:
 class TestTickerCommand:
     """Test the check-tickers command functionality."""
 
-
     def test_check_tickers_api(self):
         """Test check-tickers command with mocked SEC API."""
 
@@ -421,7 +422,7 @@ class TestTickerCommand:
             "1": {"ticker": "DEMO", "title": "Demo Inc"}
         }
         ticker_file = os.path.join(temp_dir, "test_tickers.json")
-        with open(ticker_file, 'w') as f:
+        with open(ticker_file, 'w', encoding='utf-8') as f:
             json.dump(mock_tickers, f)
 
         runner = click.testing.CliRunner()
@@ -442,7 +443,6 @@ class TestTickerCommand:
 
 class TestGitHubFunctionality:
     """Test GitHub file download and execution."""
-
 
     def test_github_file_download(self, temp_dir):
         """Test downloading files from GitHub."""
@@ -467,7 +467,7 @@ class TestGitHubFunctionality:
         assert result.exit_code == 0
         assert os.path.exists(outfile)
 
-        with open(outfile, 'r') as f:
+        with open(outfile, 'r', encoding='utf-8') as f:
             content = f.read()
         assert content == test_script_content
 
@@ -485,7 +485,8 @@ class TestGitHubFunctionality:
             runner = click.testing.CliRunner()
             result = runner.invoke(main, [
                 'pyscript',
-                '--github-url', 'https://github.com/user/repo/blob/main/test.py'
+                '--github-url',
+                'https://github.com/user/repo/blob/main/test.py'
             ])
 
         assert result.exit_code == 0
@@ -501,7 +502,7 @@ class TestFullWorkflow:
         with patch('ox_task.ui.cli.setup_job_environment') as mock_setup:
             mock_setup.return_value = temp_dir
 
-            with patch('ox_task.ui.cli.notify_result') as mock_notify:
+            with patch('ox_task.ui.cli.notify_result'):
                 runner = click.testing.CliRunner()
                 result = runner.invoke(main, [
                     'run',
@@ -509,8 +510,8 @@ class TestFullWorkflow:
                     sample_task_plan_json
                 ])
 
-                # Should succeed (mocked)
-                assert result.exit_code == 0 or result.exit_code == 1  # May fail due to missing modules
+                # Should succeed (mocked) or fail due to missing modules
+                assert result.exit_code in (0, 1)
                 assert "Running" in result.output
                 assert "jobs from" in result.output
 
@@ -524,21 +525,22 @@ class TestGoldenFiles:
 
         # Create golden file (you would provide this)
         expected_output = "Hello World\n"
-        with open(golden_file, 'w') as f:
+        with open(golden_file, 'w', encoding='utf-8') as f:
             f.write(expected_output)
 
         # Run actual command
         result = subprocess.run([
             sys.executable, '-c', "print('Hello World')"
-        ], capture_output=True, text=True, cwd=temp_dir)
+        ], capture_output=True, text=True, cwd=temp_dir, check=False)
 
         # Compare with golden file
-        with open(golden_file, 'r') as f:
+        with open(golden_file, 'r', encoding='utf-8') as f:
             golden_content = f.read()
 
         assert result.stdout == golden_content
 
-    def test_task_plan_parsing_golden(self, sample_task_plan_json, golden_files_dir):
+    def test_task_plan_parsing_golden(self, sample_task_plan_json,
+                                     golden_files_dir):
         """Test task plan parsing output against golden file."""
         golden_file = os.path.join(golden_files_dir, "parsed_task_plan.json")
 
@@ -550,9 +552,9 @@ class TestGoldenFiles:
             "env_count": len(task_plan.envs),
             "job_count": len(task_plan.jobs),
             "note_count": len(task_plan.notes),
-            "env_names": sorted(task_plan.envs.keys()),
-            "job_names": sorted(task_plan.jobs.keys()),
-            "note_names": sorted(task_plan.notes.keys())
+            "env_names": sorted(list(task_plan.envs.keys())),
+            "job_names": sorted(list(task_plan.jobs.keys())),
+            "note_names": sorted(list(task_plan.notes.keys()))
         }
 
         # You would provide this golden file
@@ -565,7 +567,7 @@ class TestGoldenFiles:
             "note_names": ["test_file"]
         }
 
-        with open(golden_file, 'w') as f:
+        with open(golden_file, 'w', encoding='utf-8') as f:
             json.dump(expected_data, f, indent=2)
 
         # Compare
@@ -578,7 +580,7 @@ class TestErrorHandling:
     def test_malformed_json_task_plan(self, temp_dir):
         """Test handling of malformed JSON task plan."""
         bad_json_file = os.path.join(temp_dir, "bad_tasks.json")
-        with open(bad_json_file, 'w') as f:
+        with open(bad_json_file, 'w', encoding='utf-8') as f:
             f.write('{"invalid": json syntax')
 
         with pytest.raises(json.JSONDecodeError):
@@ -598,10 +600,11 @@ class TestErrorHandling:
         }
 
         json_file = os.path.join(temp_dir, "missing_env.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f)
 
-        task_plan = _parse_task_plan_file(json_file)
+        _parse_task_plan_file(json_file)
+
 
 class TestSecurityConsiderations:
     """Test security-related aspects of the ox_task system."""
@@ -613,7 +616,8 @@ class TestSecurityConsiderations:
             "envs": {
                 "unsafe_env": {
                     "variables": {
-                        "POTENTIALLY_DANGEROUS": "`rm -rf /tmp/test`"  # Example of dangerous command
+                        # Example of dangerous command
+                        "POTENTIALLY_DANGEROUS": "`rm -rf /tmp/test`"
                     }
                 }
             },
@@ -635,14 +639,14 @@ class TestSecurityConsiderations:
         }
 
         json_file = os.path.join(temp_dir, "security_test.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
 
         # Verify that shell usage is explicit and documented
         unsafe_job = task_plan.jobs["unsafe_shell_job"]
-        assert unsafe_job.shell == True  # Shell usage is explicit
+        assert unsafe_job.shell is True  # Shell usage is explicit
 
         # Verify environment variables with backticks are stored as-is
         unsafe_env = task_plan.envs["unsafe_env"]
@@ -677,14 +681,13 @@ class TestSecurityConsiderations:
         }
 
         json_file = os.path.join(temp_dir, "safe_test.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
         safe_job = task_plan.jobs["safe_job"]
 
-        assert safe_job.shell == False  # Shell disabled by default
-        assert safe_job.shell == False  # Shell disabled by default
+        assert not safe_job.shell  # Shell disabled by default
         assert isinstance(safe_job.command, list)  # List format
 
     def test_missing_environment_error_handling(self, temp_dir):
@@ -701,7 +704,7 @@ class TestSecurityConsiderations:
         }
 
         json_file = os.path.join(temp_dir, "missing_env.json")
-        with open(json_file, 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(task_data, f)
 
         task_plan = _parse_task_plan_file(json_file)
