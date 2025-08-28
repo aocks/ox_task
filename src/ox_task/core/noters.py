@@ -138,3 +138,29 @@ class FileNotifier:
     def notify_message(self, msg):
         with open(self.path, 'w', encoding='utf8') as fdesc:
             fdesc.write(msg)
+
+
+class EchoNotifier:
+
+    def __init__(self, max_len=450, max_lines=6, conditions=None, **kwargs):
+        self.max_len = max_len
+        self.max_lines = max_lines
+        self.conditions = conditions
+        kwargs.pop('class_name', None)
+        kwargs.pop('description', None)
+        if kwargs:
+            logging.warning('Ignoring kwargs: %s', kwargs)
+
+    def format_result_to_msg(self, job_result):
+        return str(job_result)
+
+    def notify_result(self, job_result):
+        msg = self.format_result_to_msg(job_result)
+        self.notify_message(msg)
+
+    def notify_message(self, msg):
+        short_msg = msg[:self.max_len]
+        short_msg = '\n'.join(short_msg.split('\n')[:self.max_lines])
+        if short_msg != msg:
+            short_msg += '...'
+        print(short_msg)
