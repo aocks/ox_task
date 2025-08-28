@@ -66,22 +66,30 @@ def github_file(url, outfile, timeout):
 @click.option('--path', type=click.Path(),
               help='Path to where to store local copy of the file.')
 @click.option('--timeout', type=float, default=30)
-def pyscript(github_url, path, timeout):
+@click.option('--runtime', default='python3', help=(
+    "Path to python runtime. Usually you should leave as default python3."))
+def pyscript(github_url, path, timeout=30, runtime='python3'):
     """Download and execute a Python script from GitHub or run a local script.
+
+You can specify the runtime if desired, but generally you should leave
+it as the default `python3` so that if `pyscript` is run via `ox_task
+run` then the right version of python3 for the virtual env created will
+be used (`ox_task run` will setup paths to make this happen).
     """
     if not github_url and not path:
         raise click.BadParameter('Must provide github-url and/or path.')
-    
+
     with ExitStack() as stack:
         if github_url:  # need to download file from github
             if not path:  # no path give so download to temporary file path
                 tmpdir = stack.enter_context(tempfile.TemporaryDirectory())
                 path = os.path.join(tmpdir, 'script.py')
             github_file.callback(url=github_url, outfile=path, timeout=timeout)
-        cmd = [sys.executable, path]
+
+        cmd = [runtime, path]
         result = simple_run_command(cmd, capture_output=True, text=True,
                                     timeout=timeout)
-    
+
     click.echo(f'Result of calling {cmd=}:\n{result}')
     if result['exit_code']:
         raise subprocess.CalledProcessError(
@@ -134,8 +142,6 @@ def _create_virtual_environment(job_dir: str, env_config) -> None:
 
 def _install_requirements(job_dir: str, env_config) -> None:
     """Install requirements in the virtual environment."""
-    if not env_config.requirements:
-        return
 
     venv_path = os.path.join(job_dir, "venv")
     if os.name == "nt":  # Windows
@@ -143,7 +149,11 @@ def _install_requirements(job_dir: str, env_config) -> None:
     else:
         pip_path = os.path.join(venv_path, "bin", "pip")
 
-    for requirement in env_config.requirements:
+    req_list = list(env_config.requirements) if env_config.requirements else []
+
+    if not any(['ox_task' in r for r in req_list]):
+        req_list.append('git+https://github.com/aocks/ox_task.git')#FIXME: make this pip
+    for requirement in req_list:
         subprocess.run(
             [pip_path, "install", requirement],
             check=True,
@@ -218,21 +228,26 @@ def simple_run_command(command: List[str], **kwargs) -> Dict[str, Any]:
     return job_results
 
 
-def _prepare_environment_variables(job_name, env_config) -> Dict[str, str]:
+def _prepare_environment_variables(
+        job_dir, job_name, env_config) -> Dict[str, str]:
     """
     Prepare environment variables with shell command execution and templating.
     """
     env_vars = os.environ.copy()
     env_vars['OX_TASK_JOB_NAME'] = job_name
-    if not env_config.variables:
-        return env_vars
+    if env_config.variables:
+        for name, value in list(env_config.variables.items()):
+            if value.startswith('`') and value.endswith('`'):
+                value = shell_tools.run_shell_command(value[1:-1], env=env_vars)
+            else:
+                value = Template(value).safe_substitute(env_vars)
+            env_vars[name] = value
 
-    for name, value in list(env_config.variables.items()):
-        if value.startswith('`') and value.endswith('`'):
-            value = shell_tools.run_shell_command(value[1:-1], env=env_vars)
-        else:
-            value = Template(value).safe_substitute(env_vars)
-        env_vars[name] = value
+    # Must set path so that subprocesses will use the right venv if
+    # they invoke "python3".
+    path = env_vars.get('PATH', None)
+    env_vars['PATH'] = os.path.join(job_dir, 'bin') + (
+        '' if not path else (':' + path))
 
     return env_vars
 
@@ -279,7 +294,7 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
             raise ValueError(f'Expected list or tuple for {command=}')
 
         # Set up environment variables
-        env_vars = _prepare_environment_variables(job_name, env_config)
+        env_vars = _prepare_environment_variables(job_dir, job_name, env_config)
 
         # Add venv to PATH
         venv_bin = os.path.join(job_dir, "venv", "bin")
@@ -372,7 +387,7 @@ def run(working_dir: str, task_plan_file: str, re_raise: bool) -> None:
 
 If you provide --re-raise, then an Exception will be raised if any job
 fails. This can be helpful if you want to debug or if you just want to
-stop execution of all tasks if any task fails.    
+stop execution of all tasks if any task fails.
     """
     # Set default working directory
     if working_dir is None:
