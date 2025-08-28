@@ -49,8 +49,9 @@ class TaskJob(BaseModel):
     env: str = Field(
         description="String name of a TaskEnv indicating environment to use"
     )
-    note: str = Field(
-        description="String name of a TaskNote indicating how to track"
+    note: Optional[str] = Field(
+        description="String name of a TaskNote indicating how to track",
+        default=""
     )
     command: Union[str, List[str]] = Field(
         description="Command to execute - can be a string or list of strings"
@@ -84,52 +85,3 @@ class TaskPlan(BaseModel):
     )
 
 
-# Example usage and validation
-if __name__ == "__main__":
-    # Example JSON data based on your specification
-    example_data = {
-        "envs": {
-            "simple_python": {
-                "requirements": ["requests"]
-            }
-        },
-        "jobs": {
-            "check_tickers": {
-                "env": "simple_python",
-                "note": "simple_file_log",
-                "command": [
-                    "python3", "src/ox_task/example_tasks/check_tickers.py",
-                    "--alert-exists", "FUSE",
-                    "--alert-not-exists", "CSLM"
-                ]
-            }
-        },
-        "notes": {
-            "simple_file_log": {
-                "class_name": "SimpleFileLog",
-                "filename": "results.log.txt"
-            }
-        }
-    }
-    
-    # Parse and validate the data
-    try:
-        task_plan = TaskPlan(**example_data)
-        import pdb; pdb.set_trace()#FIXME        
-        print("✓ Task plan parsed successfully!")
-        print(f"Found {len(task_plan.envs)} environments, "
-              f"{len(task_plan.jobs)} jobs, {len(task_plan.notes)} notes")
-        
-        # Access specific elements
-        simple_python_env = task_plan.envs["simple_python"]
-        print(f"Simple python env requirements: "
-              f"{simple_python_env.requirements}")
-        
-        check_tickers_job = task_plan.jobs["check_tickers"]
-        print(f"Check tickers command: {check_tickers_job.command}")
-        
-        simple_file_log = task_plan.notes["simple_file_log"]
-        print(f"Log class: {simple_file_log.class_name}")
-
-    except Exception as e:
-        print(f"✗ Validation failed: {e}")
