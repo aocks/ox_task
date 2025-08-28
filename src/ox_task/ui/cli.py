@@ -231,11 +231,12 @@ def simple_run_command(command: List[str], **kwargs) -> Dict[str, Any]:
     return job_results
 
 
-def _prepare_environment_variables(env_config) -> Dict[str, str]:
+def _prepare_environment_variables(job_name, env_config) -> Dict[str, str]:
     """
     Prepare environment variables with shell command execution and templating.
     """
     env_vars = os.environ.copy()
+    env_vars['OX_TASK_JOB_NAME'] = job_name
     if not env_config.variables:
         return env_vars
 
@@ -273,6 +274,7 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
         }
 
     try:
+        env_vars = {}
         # Set up job environment
         job_dir = setup_job_environment(
             working_dir, job_name, task_plan, job_config.env
@@ -290,7 +292,7 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
             raise ValueError(f'Expected list or tuple for {command=}')
 
         # Set up environment variables
-        env_vars = _prepare_environment_variables(env_config)
+        env_vars = _prepare_environment_variables(job_name, env_config)
 
         # Add venv to PATH
         venv_bin = os.path.join(job_dir, "venv", "bin")
