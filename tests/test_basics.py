@@ -10,8 +10,6 @@ Run with: python -m pytest test_basics.py -v
 
 import json
 import os
-import shutil
-import tempfile
 import subprocess
 import sys
 from unittest.mock import patch, MagicMock
@@ -22,104 +20,7 @@ import requests_mock
 
 from ox_task.ui.cli import main, run_job, _parse_task_plan_file
 from ox_task.core import models
-
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for tests."""
-    my_temp_dir = tempfile.mkdtemp()
-    yield my_temp_dir
-    shutil.rmtree(my_temp_dir)
-
-
-@pytest.fixture
-def sample_task_plan_data():
-    """Sample task plan data for testing based on tasks.json example."""
-    return {
-        "envs": {
-            "test_python": {
-                "runtime": "python3",
-                "requirements": ["requests", "click"],
-                "variables": {
-                    "TEST_VAR": "test_value",
-                    "ST_PATH": "`echo /path/to/simple_tasks`"
-                }
-            },
-            "minimal_env": {
-                "requirements": [],
-                "variables": {}
-            }
-        },
-        "jobs": {
-            "test_echo": {
-                "description": ["Simple echo test job"],
-                "env": "minimal_env",
-                "note": "test_file",
-                "timeout": 10,
-                "shell": False,
-                "command": ["python", "-c", "print('Hello World')"]
-            },
-            "test_weather": {
-                "description": ["Test weather API call"],
-                "env": "test_python",
-                "note": "test_file",
-                "timeout": 30,
-                "shell": False,
-                "command": [
-                    "python", "-c",
-                    "import sys; sys.path.insert(0, '.'); "
-                    "from ox_task.example_tasks.simple_tasks import weather; "
-                    "weather.callback(40.7, -73.9, 30)"
-                ]
-            },
-            "test_shell_command": {
-                "description": ["Test shell command execution"],
-                "env": "minimal_env",
-                "note": "test_file",
-                "timeout": 5,
-                "shell": True,
-                "command": "echo 'Shell command test'"
-            }
-        },
-        "notes": {
-            "test_file": {
-                "description": ["File-based notifier for testing"],
-                "class_name": "FileNotifier",
-                "path": "/tmp/ox_task_test_${OX_TASK_JOB_NAME}.txt"
-            }
-        }
-    }
-
-
-@pytest.fixture
-def sample_task_plan_json(temp_dir, sample_task_plan_data):
-    """Create a sample task plan JSON file."""
-    json_file = os.path.join(temp_dir, "test_tasks.json")
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(sample_task_plan_data, f, indent=2)
-    return json_file
-
-
-@pytest.fixture
-def sample_task_plan_py(temp_dir, sample_task_plan_data):
-    """Create a sample task plan Python file."""
-    py_file = os.path.join(temp_dir, "test_tasks.py")
-    with open(py_file, 'w', encoding='utf-8') as f:
-        f.write(f"""
-# Task plan as Python module
-envs = {sample_task_plan_data['envs']!r}
-jobs = {sample_task_plan_data['jobs']!r}
-notes = {sample_task_plan_data['notes']!r}
-""")
-    return py_file
-
-
-@pytest.fixture
-def golden_files_dir(temp_dir):
-    """Directory for golden test files."""
-    golden_dir = os.path.join(temp_dir, "golden")
-    os.makedirs(golden_dir)
-    return golden_dir
+from ox_task.example_tasks.simple_tasks import cli as simple_tasks_cli
 
 
 class TestCLIBasics:
@@ -348,38 +249,33 @@ class TestJobExecution:
                 assert "timed out" in result["error"]
 
 
-class TestWeatherCommand:
-    """Test the weather command functionality."""
+def test_weather_api_call():
+    """Test weather command with mocked API."""
 
-    def test_weather_api_call(self):
-        """Test weather command with mocked API."""
-
-        with requests_mock.Mocker() as my_mock:
-            # Mock the weather API response
-            mock_response = {
-                "current": {
-                    "temperature_2m": 22.5,
-                    "wind_speed_10m": 3.2
-                }
+    with requests_mock.Mocker() as my_mock:
+        # Mock the weather API response
+        mock_response = {
+            "current": {
+                "temperature_2m": 22.5,
+                "wind_speed_10m": 3.2
             }
-            my_mock.get(
-                "https://api.open-meteo.com/v1/forecast",
-                json=mock_response
-            )
+        }
+        my_mock.get(
+            "https://api.open-meteo.com/v1/forecast",
+            json=mock_response
+        )
 
-            runner = click.testing.CliRunner()
+        runner = click.testing.CliRunner()
 
-            # Import the weather command from simple_tasks
-            from ox_task.example_tasks.simple_tasks import cli
-            result = runner.invoke(cli, [
-                'weather',
-                '--latitude', '40.7',
-                '--longitude', '-73.9'
-            ])
+        result = runner.invoke(simple_tasks_cli, [
+            'weather',
+            '--latitude', '40.7',
+            '--longitude', '-73.9'
+        ])
 
-        assert result.exit_code == 0
-        assert "temperature_2m" in result.output
-        assert "22.5" in result.output
+    assert result.exit_code == 0
+    assert "temperature_2m" in result.output
+    assert "22.5" in result.output
 
 
 class TestTickerCommand:
@@ -401,10 +297,9 @@ class TestTickerCommand:
             )
 
             runner = click.testing.CliRunner()
-            from ox_task.example_tasks.simple_tasks import cli
 
             # Test alert-exists
-            result = runner.invoke(cli, [
+            result = runner.invoke(simple_tasks_cli, [
                 'check-tickers',
                 '--alert-exists', 'FUSE,AAPL'
             ])
@@ -426,9 +321,8 @@ class TestTickerCommand:
             json.dump(mock_tickers, f)
 
         runner = click.testing.CliRunner()
-        from ox_task.example_tasks.simple_tasks import cli
 
-        result = runner.invoke(cli, [
+        result = runner.invoke(simple_tasks_cli, [
             'check-tickers',
             '--alert-exists', 'TEST',
             '--alert-not-exists', 'NOT_THERE,DEMO',
@@ -441,79 +335,74 @@ class TestTickerCommand:
             ", 'TEST': {'ticker': 'TEST', 'title': 'Test Corp'}}")
 
 
-class TestGitHubFunctionality:
-    """Test GitHub file download and execution."""
+def test_github_file_download(temp_dir):
+    """Test downloading files from GitHub."""
 
-    def test_github_file_download(self, temp_dir):
-        """Test downloading files from GitHub."""
+    with requests_mock.Mocker() as my_mock:
+        # Mock GitHub raw content
+        test_script_content = "print('Downloaded from GitHub')\n"
+        my_mock.get(
+            "https://raw.githubusercontent.com/user/repo/main/script.py",
+            text=test_script_content
+        )
 
-        with requests_mock.Mocker() as my_mock:
-            # Mock GitHub raw content
-            test_script_content = "print('Downloaded from GitHub')\n"
-            my_mock.get(
-                "https://raw.githubusercontent.com/user/repo/main/script.py",
-                text=test_script_content
-            )
+        runner = click.testing.CliRunner()
+        outfile = os.path.join(temp_dir, "downloaded_script.py")
 
+        result = runner.invoke(main, [
+            'github-file',
+            '--url', 'https://github.com/user/repo/blob/main/script.py',
+            '--outfile', outfile
+        ])
+
+    assert result.exit_code == 0
+    assert os.path.exists(outfile)
+
+    with open(outfile, 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert content == test_script_content
+
+
+def test_pyscript_github():
+    """Test executing Python script from GitHub."""
+
+    with requests_mock.Mocker() as my_mock:
+        # Mock GitHub raw content
+        test_script = "print('Hello from GitHub script')"
+        my_mock.get(
+            "https://raw.githubusercontent.com/user/repo/main/test.py",
+            text=test_script
+        )
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(main, [
+            'pyscript',
+            '--github-url',
+            'https://github.com/user/repo/blob/main/test.py'
+        ])
+
+    assert result.exit_code == 0
+    assert "Hello from GitHub script" in result.output
+
+
+def test_run_command_full_workflow(temp_dir, sample_task_plan_json):
+    """Test the complete run command workflow."""
+    # Mock the environment setup to avoid creating actual venvs
+    with patch('ox_task.ui.cli.setup_job_environment') as mock_setup:
+        mock_setup.return_value = temp_dir
+
+        with patch('ox_task.ui.cli.notify_result'):
             runner = click.testing.CliRunner()
-            outfile = os.path.join(temp_dir, "downloaded_script.py")
-
             result = runner.invoke(main, [
-                'github-file',
-                '--url', 'https://github.com/user/repo/blob/main/script.py',
-                '--outfile', outfile
+                'run',
+                '--working-dir', temp_dir,
+                sample_task_plan_json
             ])
 
-        assert result.exit_code == 0
-        assert os.path.exists(outfile)
-
-        with open(outfile, 'r', encoding='utf-8') as f:
-            content = f.read()
-        assert content == test_script_content
-
-    def test_pyscript_github(self):
-        """Test executing Python script from GitHub."""
-
-        with requests_mock.Mocker() as my_mock:
-            # Mock GitHub raw content
-            test_script = "print('Hello from GitHub script')"
-            my_mock.get(
-                "https://raw.githubusercontent.com/user/repo/main/test.py",
-                text=test_script
-            )
-
-            runner = click.testing.CliRunner()
-            result = runner.invoke(main, [
-                'pyscript',
-                '--github-url',
-                'https://github.com/user/repo/blob/main/test.py'
-            ])
-
-        assert result.exit_code == 0
-        assert "Hello from GitHub script" in result.output
-
-
-class TestFullWorkflow:
-    """Test complete workflow execution."""
-
-    def test_run_command_full_workflow(self, temp_dir, sample_task_plan_json):
-        """Test the complete run command workflow."""
-        # Mock the environment setup to avoid creating actual venvs
-        with patch('ox_task.ui.cli.setup_job_environment') as mock_setup:
-            mock_setup.return_value = temp_dir
-
-            with patch('ox_task.ui.cli.notify_result'):
-                runner = click.testing.CliRunner()
-                result = runner.invoke(main, [
-                    'run',
-                    '--working-dir', temp_dir,
-                    sample_task_plan_json
-                ])
-
-                # Should succeed (mocked) or fail due to missing modules
-                assert result.exit_code in (0, 1)
-                assert "Running" in result.output
-                assert "jobs from" in result.output
+            # Should succeed (mocked) or fail due to missing modules
+            assert result.exit_code in (0, 1)
+            assert "Running" in result.output
+            assert "jobs from" in result.output
 
 
 class TestGoldenFiles:
@@ -540,7 +429,7 @@ class TestGoldenFiles:
         assert result.stdout == golden_content
 
     def test_task_plan_parsing_golden(self, sample_task_plan_json,
-                                     golden_files_dir):
+                                      golden_files_dir):
         """Test task plan parsing output against golden file."""
         golden_file = os.path.join(golden_files_dir, "parsed_task_plan.json")
 
@@ -552,9 +441,9 @@ class TestGoldenFiles:
             "env_count": len(task_plan.envs),
             "job_count": len(task_plan.jobs),
             "note_count": len(task_plan.notes),
-            "env_names": sorted(list(task_plan.envs.keys())),
-            "job_names": sorted(list(task_plan.jobs.keys())),
-            "note_names": sorted(list(task_plan.notes.keys()))
+            "env_names": sorted(list(task_plan.envs)),
+            "job_names": sorted(list(task_plan.jobs)),
+            "note_names": sorted(list(task_plan.notes))
         }
 
         # You would provide this golden file
