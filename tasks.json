@@ -34,7 +34,7 @@
     },
     "check_tickers": {
       "env": "simple_python",
-      "note": "simple_telegram",
+      "note": "simple_file",
       "timeout": 10,
       "command": [
 	"python3", "$ST_PATH", "check-tickers",
@@ -66,6 +66,14 @@
       "to_email": "${USER}@alum.mit.edu",
       "from_email": "$FROM_EMAIL",
       "app_passwd": "$GMAIL_APP_PASSWD"
-    }
+    },
+    "simple_file": {
+      "description": [
+	"This is an example of a simple notifier to save results to ",
+	"a file."
+      ],
+      "class_name": "FileNotifier",
+      "path": "/tmp/ox_task_${OX_TASK_JOB_NAME}.txt"
+    }    
   }
 }
