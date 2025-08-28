@@ -51,7 +51,7 @@ def send_email(msg, subject, to_email, from_email, app_passwd, mode='plain'):
         return False
 
 
-def shorten_msg(msg, max_len=400, max_lines=5):
+def shorten_msg(msg, max_len=400, max_lines=6):
     short_msg = msg[:max_len]
     short_msg = '\n'.join(short_msg.split('\n')[:max_lines])
     if short_msg != msg:
