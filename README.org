@@ -27,6 +27,21 @@ custom cloud jobs:
 - https://github.com/emin63/simple_example_tasks
   - Simple example for weather and news alerts.
 
+* Frequently Asked Questions
+
+** Why use ox_task instead of python with raw GitHub Actions?
+
+Anything you can do with =ox_task=, you can do with python and raw
+GitHub Actions, so why use =ox_task= at all? The answer is that
+=ox_task= simplifies the process by eliminating some of the
+boilerplate, providing built-in notification systems, and utilities
+like environment isolation and retrieving remote scripts.
+
+In addition, =ox_task= tries to collect the key functionality required
+(e.g., environment setup and notifications) in a way where you can
+just say what you need in the =tasks.json= file. This simplifies setup
+and also keeps the GitHub actions workflow file simpler.
+
 * Specification
 
 To launch tasks, you create a JSON file defining your "Task Plan" as
