@@ -264,23 +264,18 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
     Returns:
         Dictionary containing job execution results
     """
-    # Get job configuration
+    command = 'unknown'
     job_config = task_plan.jobs.get(job_name)
     if not job_config:
-        return {
-            "status": "error",
-            "exit_code": -1,
-            "error": f"Job '{job_name}' not found in task plan",
-            "output": "",
-            "stderr": ""
-        }
+        return {"status": "error", "exit_code": -1,
+                "error": f"Job '{job_name}' not found in task plan",
+                "output": "", "stderr": ""}
 
     try:
         env_vars = {}
         # Set up job environment
         job_dir = setup_job_environment(
-            working_dir, job_name, task_plan, job_config.env
-        )
+            working_dir, job_name, task_plan, job_config.env)
 
         # Get environment configuration for path and vars
         env_config = task_plan.envs[job_config.env]
@@ -314,14 +309,9 @@ def run_job(working_dir: str, task_plan: models.TaskPlan,
             text=True, shell=job_config.shell, timeout=job_config.timeout)
     except Exception as problem:
         logging.exception('Unable to run command')
-        job_results = {
-            "status": "error",
-            "exit_code": -1,
-            "error": str(problem),
-            "output": "",
-            "stderr": "",
-            "command": []
-        }
+        job_results = {"status": "error", "exit_code": -1,
+                       "error": str(problem), "output": "", "stderr": "",
+                       "command": []}
 
     notify_result(task_plan, job_config.note, job_results, env_vars)
 
