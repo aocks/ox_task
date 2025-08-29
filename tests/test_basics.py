@@ -243,10 +243,11 @@ class TestJobExecution:
         with patch('ox_task.ui.cli.setup_job_environment') as mock_setup:
             mock_setup.return_value = temp_dir
             with patch('ox_task.ui.cli.notify_result'):
-                result = run_job(temp_dir, task_plan, "test_timeout")
+                with pytest.raises(subprocess.CalledProcessError):
+                    result = run_job(temp_dir, task_plan, "test_timeout")
 
-                assert result["status"] == "timeout"
-                assert "timed out" in result["error"]
+                    assert result["status"] == "timeout"
+                    assert "timed out" in result["error"]
 
 
 def test_weather_api_call():
@@ -599,11 +600,12 @@ class TestSecurityConsiderations:
         task_plan = _parse_task_plan_file(json_file)
 
         with patch('ox_task.ui.cli.notify_result'):
-            result = run_job(temp_dir, task_plan, "test_job")
-            assert result['status'] == 'error'
-            assert result['exit_code'] == -1
-            assert result['error'] == (
-                "Environment 'nonexistent_env' not found in task plan")
+            with pytest.raises(subprocess.CalledProcessError):
+                result = run_job(temp_dir, task_plan, "test_job")
+                assert result['status'] == 'error'
+                assert result['exit_code'] == -1
+                assert result['error'] == (
+                    "Environment 'nonexistent_env' not found in task plan")
 
 
 # Helper functions for test setup
