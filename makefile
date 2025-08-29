@@ -6,7 +6,8 @@ SHELL = /bin/bash
 
 PROJECT=ox_task
 
-PYTEST_EXTRA_FLAGS=
+PYTEST_EXTRA_FLAGS ?= ""
+
 
 .EXPORT_ALL_VARIABLES:
 
@@ -24,6 +25,15 @@ export PRINT_HELP_PYSCRIPT
 
 help:   ## Show help for avaiable targets
 	@python -c "$$PRINT_HELP_PYSCRIPT" < $(MAKEFILE_LIST)
+
+test:   ## Run tests
+	py.test -s -vvv --doctest-modules --doctest-glob='*.md' \
+            ${PYTEST_EXTRA_FLAGS} .
+
+cov:	## Run tests with code coverage
+	PYTEST_EXTRA_FLAGS="$${PYTEST_EXTRA_FLAGS} --cov=src/ox_task \
+            --cov-report term-missing" ${MAKE} test
+
 
 pypi: README.rst
 	fixme && exit 1
